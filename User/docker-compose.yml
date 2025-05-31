@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  # Base de datos para el UserService
+  UserDb:
+    image: mysql:8.0
+    container_name: UserDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: userDB
+      MYSQL_USER: soundtribe_user
+      MYSQL_PASSWORD: soundtribe_user
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - userdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MinIO para UserService
+  UserMiniO:
+    image: minio/minio:latest
+    container_name: UserMiniO
+    environment:
+      MINIO_ACCESS_KEY: fotoMinio
+      MINIO_SECRET_KEY: fotoMinio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - userminio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Microservicio de usuarios (backend Spring)
+  UserService:
+    image: garbi21/userservice:3.0
+    container_name: UserService
+    depends_on:
+      UserDb:
+        condition: service_healthy
+      UserMiniO:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://UserDb:3306/userDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_user
+      SPRING_DATASOURCE_PASSWORD: soundtribe_user
+
+      MINIO_URL: http://UserMiniO:9000
+      MINIO_ACCESS_KEY: fotoMinio
+      MINIO_SECRET_KEY: fotoMinio
+      MINIO_BUCKET_NAME: minio-foto
+
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin123
+
+      APP_BACK_URL: http://soundtribe.art:8080/
+      NOTIFICATION_BACK_URL: http://soundtribe.art:8083/notifications
+      MUSIC_BACK_URL: http://soundtribe.art:8081/
+      DONATION_BACK_URL: http://soundtribe.art:8085/
+      APP_FRONT_URL: http://soundtribe.art:4200
+
+  # Frontend Angular
+  FrontEnd:
+    image: garbi21/frontend:1.0
+    container_name: FrontEnd
+    depends_on:
+      UserService:
+        condition: service_started
+    ports:
+      - "4200:4200"
+    restart: always
+
+volumes:
+  userdb_data:
+  userminio_data:

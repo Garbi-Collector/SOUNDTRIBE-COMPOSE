@@ -42,6 +42,48 @@ services:
       retries: 5
       start_period: 10s
 
+  # Base de datos para el NotificationService
+  NotificationDb:
+    image: mysql:8.0
+    container_name: NotificationDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: notiDB
+      MYSQL_USER: soundtribe_noti
+      MYSQL_PASSWORD: soundtribe_noti
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3308:3306"
+    volumes:
+      - notificationdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos para el DonationService
+  DonationDb:
+    image: mysql:8.0
+    container_name: DonationDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: donorDB
+      MYSQL_USER: soundtribe_donor
+      MYSQL_PASSWORD: soundtribe_donor
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3309:3306"
+    volumes:
+      - donationdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # MinIO para UserService
   UserMiniO:
     image: minio/minio:latest
@@ -111,7 +153,7 @@ services:
 
   # Microservicio de música (backend Spring)
   MusicService:
-    image: garbi21/musicservice:1.0  # Cambia por tu imagen real
+    image: garbi21/musicservice:1.0
     container_name: MusicService
     depends_on:
       MusicDb:
@@ -141,6 +183,49 @@ services:
       SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 800MB
       SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 800MB
 
+  # Microservicio de notificaciones (backend Spring)
+  NotificationService:
+    image: garbi21/notificationservice:1.0
+    container_name: NotificationService
+    depends_on:
+      NotificationDb:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://NotificationDb:3306/notiDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_noti
+      SPRING_DATASOURCE_PASSWORD: soundtribe_noti
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin123
+      APP_BACK_URL: http://soundtribe.art:8083/
+      APP_FRONT_URL: http://soundtribe.art:4200
+      USER_BACK_URL: http://soundtribe.art:8080/
+      MUSIC_BACK_URL: http://soundtribe.art:8081/
+      EMAIL_USERNAME: soundtribe.art@gmail.com
+      EMAIL_PASSWORD: kyilfcmxtvkcyubm
+
+  # Microservicio de donaciones (backend Spring)
+  DonationService:
+    image: garbi21/donationservice:1.0
+    container_name: DonationService
+    depends_on:
+      DonationDb:
+        condition: service_healthy
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://DonationDb:3306/donorDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_donor
+      SPRING_DATASOURCE_PASSWORD: soundtribe_donor
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      APP_BACK_URL: http://soundtribe.art:8085/
+      APP_FRONT_URL: http://soundtribe.art:4200
+      USER_BACK_URL: http://soundtribe.art:8080/
+      NOTIFICATION_BACK_URL: http://soundtribe.art:8083/
+      ACCESS_TOKEN: APP_USR-5659729381065465-050212-f88a09422b453e3fc1fd251042140eee-1836271695
+
   # Frontend Angular
   FrontEnd:
     image: garbi21/frontend:1.0
@@ -149,6 +234,10 @@ services:
       UserService:
         condition: service_started
       MusicService:
+        condition: service_started
+      NotificationService:
+        condition: service_started
+      DonationService:
         condition: service_started
     ports:
       - "4200:4200"
@@ -159,3 +248,5 @@ volumes:
   userminio_data:
   musicdb_data:
   musicminio_data:
+  notificationdb_data:
+  donationdb_data:

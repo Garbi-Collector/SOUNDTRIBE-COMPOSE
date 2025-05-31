@@ -1,5 +1,4 @@
 version: "3.8"
-
 services:
   # Base de datos para el UserService
   UserDb:
@@ -12,9 +11,30 @@ services:
       MYSQL_PASSWORD: soundtribe_user
       MYSQL_ROOT_PASSWORD: root
     ports:
-      - "3307:3306"
+      - "3306:3306"
     volumes:
       - userdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos para el MusicService
+  MusicDb:
+    image: mysql:8.0
+    container_name: MusicDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: musicDB
+      MYSQL_USER: soundtribe_music
+      MYSQL_PASSWORD: soundtribe_music
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - musicdb_data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -42,6 +62,26 @@ services:
       retries: 5
       start_period: 10s
 
+  # MinIO para MusicService
+  MusicMiniO:
+    image: minio/minio:latest
+    container_name: MusicMiniO
+    environment:
+      MINIO_ACCESS_KEY: MusicaMinio
+      MINIO_SECRET_KEY: MusicaMinio
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - musicminio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Microservicio de usuarios (backend Spring)
   UserService:
     image: garbi21/userservice:3.0
@@ -57,20 +97,49 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://UserDb:3306/userDB
       SPRING_DATASOURCE_USERNAME: soundtribe_user
       SPRING_DATASOURCE_PASSWORD: soundtribe_user
-
       MINIO_URL: http://UserMiniO:9000
       MINIO_ACCESS_KEY: fotoMinio
       MINIO_SECRET_KEY: fotoMinio
       MINIO_BUCKET_NAME: minio-foto
-
       SPRING_SECURITY_USER_NAME: admin
       SPRING_SECURITY_USER_PASSWORD: admin123
-
       APP_BACK_URL: http://soundtribe.art:8080/
       NOTIFICATION_BACK_URL: http://soundtribe.art:8083/notifications
       MUSIC_BACK_URL: http://soundtribe.art:8081/
       DONATION_BACK_URL: http://soundtribe.art:8085/
       APP_FRONT_URL: http://soundtribe.art:4200
+
+  # Microservicio de música (backend Spring)
+  MusicService:
+    image: garbi21/musicservice:1.0  # Cambia por tu imagen real
+    container_name: MusicService
+    depends_on:
+      MusicDb:
+        condition: service_healthy
+      MusicMiniO:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://MusicDb:3306/musicDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_music
+      SPRING_DATASOURCE_PASSWORD: soundtribe_music
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      MINIO_URL: http://MusicMiniO:9000
+      MINIO_ACCESS_KEY: MusicaMinio
+      MINIO_SECRET_KEY: MusicaMinio
+      MINIO_BUCKET_NAME_SONG: minio-song
+      MINIO_BUCKET_NAME_PORTADA: minio-portada
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin123
+      APP_BACK_URL: http://soundtribe.art:8081/
+      APP_FRONT_URL: http://soundtribe.art:4200
+      USER_BACK_URL: http://soundtribe.art:8080/
+      NOTIFICATION_BACK_URL: http://soundtribe.art:8083/
+      EMAIL_USERNAME: soundtribe.art@gmail.com
+      EMAIL_PASSWORD: kyilfcmxtvkcyubm
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 800MB
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 800MB
 
   # Frontend Angular
   FrontEnd:
@@ -79,6 +148,8 @@ services:
     depends_on:
       UserService:
         condition: service_started
+      MusicService:
+        condition: service_started
     ports:
       - "4200:4200"
     restart: always
@@ -86,3 +157,5 @@ services:
 volumes:
   userdb_data:
   userminio_data:
+  musicdb_data:
+  musicminio_data:

@@ -1,0 +1,297 @@
+version: "3.8"
+services:
+  # Base de datos para el UserService
+  UserDb:
+    image: mysql:8.0
+    container_name: UserDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: userDB
+      MYSQL_USER: soundtribe_user
+      MYSQL_PASSWORD: soundtribe_user
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - userdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos para el MusicService
+  MusicDb:
+    image: mysql:8.0
+    container_name: MusicDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: musicDB
+      MYSQL_USER: soundtribe_music
+      MYSQL_PASSWORD: soundtribe_music
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - musicdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos para el NotificationService
+  NotificationDb:
+    image: mysql:8.0
+    container_name: NotificationDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: notiDB
+      MYSQL_USER: soundtribe_noti
+      MYSQL_PASSWORD: soundtribe_noti
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3308:3306"
+    volumes:
+      - notificationdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Base de datos para el DonationService
+  DonationDb:
+    image: mysql:8.0
+    container_name: DonationDb
+    restart: always
+    environment:
+      MYSQL_DATABASE: donorDB
+      MYSQL_USER: soundtribe_donor
+      MYSQL_PASSWORD: soundtribe_donor
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3309:3306"
+    volumes:
+      - donationdb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MinIO para UserService
+  UserMiniO:
+    image: minio/minio:latest
+    container_name: UserMiniO
+    environment:
+      MINIO_ACCESS_KEY: fotoMinio
+      MINIO_SECRET_KEY: fotoMinio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - userminio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MinIO para MusicService
+  MusicMiniO:
+    image: minio/minio:latest
+    container_name: MusicMiniO
+    environment:
+      MINIO_ACCESS_KEY: MusicaMinio
+      MINIO_SECRET_KEY: MusicaMinio
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - musicminio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+
+
+
+
+
+  # Microservicio de usuarios (backend Spring)
+  UserService:
+    image: garbi21/userservice:4.1
+    container_name: UserService
+    depends_on:
+      UserDb:
+        condition: service_healthy
+      UserMiniO:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://UserDb:3306/userDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_user
+      SPRING_DATASOURCE_PASSWORD: soundtribe_user
+      MINIO_URL: http://UserMiniO:9000
+      MINIO_ACCESS_KEY: fotoMinio
+      MINIO_SECRET_KEY: fotoMinio
+      MINIO_BUCKET_NAME: minio-foto
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin123
+      APP_BACK_URL: http://soundtribe.art:8080/
+      NOTIFICATION_BACK_URL: http://soundtribe.art:8083/notifications
+      MUSIC_BACK_URL: http://soundtribe.art:8081/
+      DONATION_BACK_URL: http://soundtribe.art:8085/
+      APP_FRONT_URL: http://soundtribe.art:4200
+
+  # Microservicio de música (backend Spring)
+  MusicService:
+    image: garbi21/musicservice:4.1
+    container_name: MusicService
+    depends_on:
+      MusicDb:
+        condition: service_healthy
+      MusicMiniO:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://MusicDb:3306/musicDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_music
+      SPRING_DATASOURCE_PASSWORD: soundtribe_music
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      MINIO_URL: http://MusicMiniO:9000
+      MINIO_ACCESS_KEY: MusicaMinio
+      MINIO_SECRET_KEY: MusicaMinio
+      MINIO_BUCKET_NAME_SONG: minio-song
+      MINIO_BUCKET_NAME_PORTADA: minio-portada
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin123
+      APP_BACK_URL: http://soundtribe.art:8081/
+      APP_FRONT_URL: http://soundtribe.art:4200
+      USER_BACK_URL: http://soundtribe.art:8080/
+      NOTIFICATION_BACK_URL: http://soundtribe.art:8083/
+      EMAIL_USERNAME: soundtribe.art@gmail.com
+      EMAIL_PASSWORD: kyilfcmxtvkcyubm
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 800MB
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 800MB
+
+  # Microservicio de notificaciones (backend Spring)
+  NotificationService:
+    image: garbi21/notificationservice:4.1
+    container_name: NotificationService
+    depends_on:
+      NotificationDb:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://NotificationDb:3306/notiDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_noti
+      SPRING_DATASOURCE_PASSWORD: soundtribe_noti
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin123
+      APP_BACK_URL: http://soundtribe.art:8083/
+      APP_FRONT_URL: http://soundtribe.art:4200
+      USER_BACK_URL: http://soundtribe.art:8080/
+      MUSIC_BACK_URL: http://soundtribe.art:8081/
+      EMAIL_USERNAME: soundtribe.art@gmail.com
+      EMAIL_PASSWORD: kyilfcmxtvkcyubm
+
+  # Microservicio de donaciones (backend Spring)
+  DonationService:
+    image: garbi21/donationservice:4.1
+    container_name: DonationService
+    depends_on:
+      DonationDb:
+        condition: service_healthy
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://DonationDb:3306/donorDB
+      SPRING_DATASOURCE_USERNAME: soundtribe_donor
+      SPRING_DATASOURCE_PASSWORD: soundtribe_donor
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      APP_BACK_URL: http://soundtribe.art:8085/
+      APP_FRONT_URL: http://soundtribe.art:4200
+      USER_BACK_URL: http://soundtribe.art:8080/
+      NOTIFICATION_BACK_URL: http://soundtribe.art:8083/
+      ACCESS_TOKEN: APP_USR-5659729381065465-050212-f88a09422b453e3fc1fd251042140eee-1836271695
+
+  # Frontend Angular
+  FrontEnd:
+    image: garbi21/frontend:2.0
+    container_name: FrontEnd
+    depends_on:
+      UserService:
+        condition: service_started
+      MusicService:
+        condition: service_started
+      NotificationService:
+        condition: service_started
+      DonationService:
+        condition: service_started
+    ports:
+      - "4200:4200"
+    restart: always
+
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - "4040:80"
+    environment:
+      PMA_ARBITRARY: 1  # 💥 Esto permite ingresar cualquier host manualmente
+    depends_on:
+      - UserDb
+      - MusicDb
+      - NotificationDb
+      - DonationDb
+
+
+
+
+volumes:
+  userdb_data:
+  userminio_data:
+  musicdb_data:
+  musicminio_data:
+  notificationdb_data:
+  donationdb_data:
+  grafana_data:

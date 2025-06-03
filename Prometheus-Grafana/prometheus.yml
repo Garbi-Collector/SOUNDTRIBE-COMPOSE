@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'user-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['UserService:8080']
+
+  - job_name: 'music-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['MusicService:8081']
+
+  - job_name: 'notification-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['NotificationService:8083']
+
+  - job_name: 'donation-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['DonationService:8085']
